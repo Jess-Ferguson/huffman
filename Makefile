@@ -3,7 +3,7 @@ SRCDIR := src
 OBJDIR := obj
 DEPDIR := include
 TARGET := huffman
-CFLAGS := -Wall -Wextra -Wpedantic -std=c17 -I$(DEPDIR)
+CFLAGS := -Wall -Wextra -Wpedantic -std=c17 -I$(DEPDIR) -g
 
 LIBS := 
 

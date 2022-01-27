@@ -26,7 +26,6 @@
 
 /* Return values */
 
-#define EXIT_SUCCESS 0
 #define MEM_ERROR -1
 #define INPUT_ERROR -2
 

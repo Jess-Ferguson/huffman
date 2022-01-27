@@ -73,7 +73,10 @@
 #define ENCODING_TABLE_LENGTH 1 << 8
 #define DECODING_TABLE_LENGTH 1 << 16
 
-#define PEEK_PADDING 6
+#define VALID_TREE 0
+#define INVALID_TREE 1
+
+#define PEEK_PADDING 2 /* We add two bytes at the end of the encoded data to prevent peek_buffer() from reading past the end of the buffer when we decode it */  
 
 /* Huffman Tree node */
 
@@ -157,23 +160,19 @@ static int create_huffman_tree(const size_t * freq, huffman_node_t ** head_node)
 		}
 	}
 
-	node_list_p = node_list;
-
-	for(; node_count > 1; node_count--) {
+	for(node_list_p = node_list; node_count > 1; node_count--) {
 		qsort(node_list_p, node_count, sizeof(huffman_node_t *), node_compare);
 
 		if(!(internal_node = create_internal_node(node_list_p[0], node_list_p[1])))
 			return MEM_ERROR;
 
-		node_list_p[0] = NULL;
 		node_list_p[1] = internal_node;
-
 		node_list_p++;
 	}
 
 	*head_node = node_list_p[0];
 
-	return EXIT_SUCCESS;
+	return VALID_TREE;
 }
 
 static void create_encoding_table(const huffman_node_t * node, huffman_coding_table_t encoding_table[MAX_INPUT_SET_SIZE], uint8_t bits_set)
@@ -201,6 +200,28 @@ static void destroy_huffman_tree(huffman_node_t * node)
 	free(node);
 
 	return;
+}
+
+static bool validate_huffman_tree(huffman_node_t * node)
+{
+	static int depth = 0;
+
+	if(depth == MAX_CODE_LEN)
+		return INVALID_TREE;
+
+	if(node->child[1]) {
+		depth++;
+
+		if(validate_huffman_tree(node->child[0]) == INVALID_TREE)
+			return INVALID_TREE;
+
+		if(validate_huffman_tree(node->child[1]) == INVALID_TREE)
+			return INVALID_TREE;
+
+		depth--;
+	}
+
+	return VALID_TREE;
 }
 
 static inline void write_k_bits(uint8_t * buffer, uint16_t value, size_t * bit_pos, const uint8_t bits)
@@ -284,8 +305,16 @@ int huffman_encode(const uint8_t * input, uint8_t ** output, const uint32_t deco
 
 	huffman_node_t * head_node = NULL;
 
-	if(create_huffman_tree(freq, &head_node) != EXIT_SUCCESS)
+	if(create_huffman_tree(freq, &head_node) != VALID_TREE)
 		return MEM_ERROR;
+
+	while(validate_huffman_tree(head_node) != VALID_TREE) {
+		destroy_huffman_tree(head_node);
+
+		return INPUT_ERROR; /* Fail gracefully if the tree is deeper than MAX_CODE_LEN */
+
+		/* TODO: Find a way to fix invalid trees and continue */
+	}
 
 	huffman_coding_table_t encoding_table[ENCODING_TABLE_LENGTH] = {{ .code = 0, .length = 0 }};
 
@@ -309,7 +338,7 @@ int huffman_encode(const uint8_t * input, uint8_t ** output, const uint32_t deco
 	for(size_t i = 0; i < decompressed_length; i++)
 		encoded_bit_length += encoding_table[input[i]].length;
 
-	size_t total_length = HEADER_BASE_SIZE + ((encoded_bit_length + header_bit_length + 7) >> 3) + 1 + PEEK_PADDING; /* Fast division by 8, add one if there's a remainder */
+	size_t total_length = HEADER_BASE_SIZE + ((encoded_bit_length + header_bit_length + 7) >> 3) + PEEK_PADDING; /* Fast division by 8, add one if there's a remainder */
 
 	if(!(*output = calloc(total_length, sizeof(uint8_t))))
 		return MEM_ERROR;
