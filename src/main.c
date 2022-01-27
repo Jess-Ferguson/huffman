@@ -21,6 +21,7 @@ int main()
 				"tteesstt",
 				"test",
 				"ab",
+				"",
 				"Ω≈ç√∫˜µ≤≥÷",
 				"ЁЂЃЄЅІЇЈЉЊЋЌЍЎЏАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмнопрстуфхцчшщъыьэюя",
 				"If you're reading this, you've been in a coma for almost 20 years now. We're trying a new technique. We don't know where this message will end up in your dream, but we hope it works. Please wake up, we miss you.",
@@ -36,7 +37,7 @@ int main()
 	size_t failures = 0;
 	size_t test_count = sizeof(test_strings) / sizeof(test_strings[0]);
 	size_t test_len;
-	uint32_t compressed_len;	
+	int32_t compressed_len, decompressed_len;	
 
 	for(size_t i = 0; i < test_count; i++) {
 		printf("\nEncoding string %zu...", i);
@@ -44,7 +45,7 @@ int main()
 
 		test_len = strlen(test_strings[i]) + 1;
 
-		if(huffman_encode((uint8_t *)test_strings[i], &encoded, test_len, &compressed_len) != EXIT_SUCCESS) {
+		if((compressed_len = huffman_encode((uint8_t *)test_strings[i], &encoded, test_len)) < 0) {
 			fprintf(stderr, "\nError: Failed to encode string %zu!\n", i);
 			failures++;
 			continue;
@@ -53,7 +54,7 @@ int main()
 		printf("Done!\nAttempting to decode...");
 		fflush(stdout);
 
-		if(huffman_decode(encoded, &decoded) != EXIT_SUCCESS) {
+		if((decompressed_len = huffman_decode(encoded, &decoded)) < 0) {
 			fprintf(stderr, "\nError: Failed to decode string %zu!\n", i);
 			free(encoded);
 			failures++;

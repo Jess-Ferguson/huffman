@@ -1,7 +1,7 @@
 /* 
  *	Filename:	huffman.c
  *	Author:	 	Jess Ferguson
- *	Date:		17/07/20
+ *	Date:		27/01/22
  *	Licence:	GNU GPL V3
  *
  *	Encode and decode a byte stream using Huffman coding
@@ -72,6 +72,8 @@
 #define MAX_INPUT_SET_SIZE 1 << 8 /* The input can contain at most 256 (1 << 8) unique bytes */ 
 #define ENCODING_TABLE_LENGTH 1 << 8
 #define DECODING_TABLE_LENGTH 1 << 16
+
+#define PEEK_PADDING 6
 
 /* Huffman Tree node */
 
@@ -149,9 +151,11 @@ static int create_huffman_tree(const size_t * freq, huffman_node_t ** head_node)
 	huffman_node_t ** node_list_p;
 	size_t node_count = 0;
 
-	for(size_t i = 0; i < MAX_INPUT_SET_SIZE; i++)
-		if(freq[i] && !(node_list[node_count++] = create_byte_node((uint8_t)i, freq[i])))
+	for(size_t i = 0; i < MAX_INPUT_SET_SIZE; i++) {
+		if(freq[i] && !(node_list[node_count++] = create_byte_node((uint8_t)i, freq[i]))) {
 			return MEM_ERROR;
+		}
+	}
 
 	node_list_p = node_list;
 
@@ -236,7 +240,7 @@ static inline uint16_t peek_buffer(const uint8_t * input, const size_t bit_pos)
 
 /* Interface functions */
 
-int huffman_encode(const uint8_t * input, uint8_t ** output, const uint32_t decompressed_length, uint32_t * compressed_length)
+int huffman_encode(const uint8_t * input, uint8_t ** output, const uint32_t decompressed_length)
 {
 	size_t freq[MAX_INPUT_SET_SIZE] = { 0 };
 	size_t encoded_bytes = 0;
@@ -294,22 +298,21 @@ int huffman_encode(const uint8_t * input, uint8_t ** output, const uint32_t deco
 
 	/* Use the generated encoding table to calculate the byte length of the output */
 
-	for(size_t i = 0; i < ENCODING_TABLE_LENGTH; i++)
-		if(encoding_table[i].length)
+	for(size_t i = 0; i < ENCODING_TABLE_LENGTH; i++) {
+		if(encoding_table[i].length) {
 			header_bit_length += 16 + encoding_table[i].length;
+		}
+	}
 
 	size_t encoded_bit_length = 0;
 
 	for(size_t i = 0; i < decompressed_length; i++)
 		encoded_bit_length += encoding_table[input[i]].length;
 
-	size_t total_length = HEADER_BASE_SIZE + ((encoded_bit_length + header_bit_length + 7) >> 3) + 1; /* Fast division by 8, add one if there's a remainder */
+	size_t total_length = HEADER_BASE_SIZE + ((encoded_bit_length + header_bit_length + 7) >> 3) + 1 + PEEK_PADDING; /* Fast division by 8, add one if there's a remainder */
 
 	if(!(*output = calloc(total_length, sizeof(uint8_t))))
 		return MEM_ERROR;
-
-	if(compressed_length != NULL)
-		*compressed_length = total_length;
 
 	/* Write header information */
 
@@ -333,7 +336,7 @@ int huffman_encode(const uint8_t * input, uint8_t ** output, const uint32_t deco
 	for(size_t i = 0; i < decompressed_length; i++)
 		write_k_bits(*output, encoding_table[input[i]].code, &bit_pos, encoding_table[input[i]].length);
 
-	return EXIT_SUCCESS;
+	return total_length;
 }
 
 int huffman_decode(const uint8_t * input, uint8_t ** output)
@@ -385,5 +388,5 @@ int huffman_decode(const uint8_t * input, uint8_t ** output)
 
 	(*output)[decompressed_length] = '\0';
 
-	return EXIT_SUCCESS;
+	return decompressed_length;
 }
