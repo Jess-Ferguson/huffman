@@ -1,6 +1,6 @@
 /* 
  *	Filename:	huffman.h
- *	Author:	 	Jess Turner
+ *	Author:	 	Jess Ferguson
  *	Date:		17/07/20
  *	Licence:	GNU GPL V3
  *

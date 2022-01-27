@@ -1,6 +1,6 @@
 /* 
  *	Filename:	huffman.c
- *	Author:	 	Jess Turner
+ *	Author:	 	Jess Ferguson
  *	Date:		17/07/20
  *	Licence:	GNU GPL V3
  *
@@ -60,7 +60,7 @@
 #include <stdlib.h> /* Internally includes stddef.h for size_t */
 #include <string.h>
 
-#include "../include/huffman.h"
+#include "huffman.h"
 
 #define INTERNAL_NODE 0 /* Identifiers for determining what type of node a node in a Huffman Tree is */ 
 #define BYTE_NODE 1
@@ -69,9 +69,9 @@
 
 #define MAX_CODE_LEN 16 /* The longest any encoded representation is allowed to be */
 
-#define MAX_INPUT_SET_SIZE 2 << 8 /* The input can contain at most 2 << 8 unique bytes */ 
-#define ENCODING_TABLE_LENGTH 2 << 8
-#define DECODING_TABLE_LENGTH 2 << 16
+#define MAX_INPUT_SET_SIZE 1 << 8 /* The input can contain at most 256 (1 << 8) unique bytes */ 
+#define ENCODING_TABLE_LENGTH 1 << 8
+#define DECODING_TABLE_LENGTH 1 << 16
 
 /* Huffman Tree node */
 
@@ -199,7 +199,7 @@ static void destroy_huffman_tree(huffman_node_t * node)
 	return;
 }
 
-static void write_k_bits(uint8_t * buffer, uint16_t value, size_t * bit_pos, const uint8_t bits)
+static inline void write_k_bits(uint8_t * buffer, uint16_t value, size_t * bit_pos, const uint8_t bits)
 {
 	size_t byte_pos = *bit_pos >> 3;
 	size_t bit_offset = *bit_pos & 7;
@@ -226,7 +226,7 @@ static void write_k_bits(uint8_t * buffer, uint16_t value, size_t * bit_pos, con
 
 /* Internal decoding functions */
 
-static uint16_t peek_buffer(const uint8_t * input, const size_t bit_pos)
+static inline uint16_t peek_buffer(const uint8_t * input, const size_t bit_pos)
 {
 	size_t byte_pos = bit_pos >> 3;
 	uint32_t concat = (input[byte_pos + 2] << 0x10) | (input[byte_pos + 1] << 0x8) | input[byte_pos];
