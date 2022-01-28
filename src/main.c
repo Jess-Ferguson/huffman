@@ -120,14 +120,22 @@ int main(int argc, char ** argv)
 			return -1;
 		}
 
+		if(test_strings_file_len == 0) {
+			fprintf(stderr, "[-] No tests detected, terminating...\n");
+			fclose(test_strings_fp);
+			return 0;
+		}
+
 		rewind(test_strings_fp);
 
-		if(!(test_strings = malloc(test_strings_file_len * sizeof(char)))) {
+		if(!(test_strings = malloc((test_strings_file_len + 1) * sizeof(char)))) {  /* The extra byte is so we have somewhere to put a null byte in case the file doesn't end with a new line */
 			fprintf(stderr, "Error: Could not allocate memory for test strings!\n");
 			perror("malloc()");
 			fclose(test_strings_fp);
 			return -1;
 		}
+
+		test_strings[test_strings_file_len] = '\0';
 
 		fread(test_strings, sizeof(char), test_strings_file_len, test_strings_fp);
 		fclose(test_strings_fp);
@@ -138,6 +146,9 @@ int main(int argc, char ** argv)
 				test_strings[i] = '\0';
 			}
 		}
+
+		if(test_strings[test_strings_file_len - 1] != '\n')
+			test_count++;
 	} else {
 		size_t test_strings_length = BASE_INPUT_LEN;
 		bool resize_test_strings = true;
@@ -163,11 +174,13 @@ int main(int argc, char ** argv)
 			memcpy(test_strings + test_length, input_buffer, input_length + 1);
 
 			test_length += input_length;
-			test_count++;
+
+			if(input_buffer[input_length - 1] == '\n')
+				test_count++;
 		}
 
-		if(test_count > 0)
-			test_count--;
+		if(test_length > 0 && test_strings[test_length - 1] != '\n')
+			test_count++;
 	}
 
 	if(!test_count) {
@@ -196,12 +209,6 @@ int main(int argc, char ** argv)
 		for(size_t i = 0, cur_test = 1; i < test_length && cur_test < test_count; i++) {
 			if(test_strings[i] == '\n') { /* Tests from stdin are deliniated with newlines */
 				test_strings[i] = '\0';
-
-				if(i == test_length - 1) {
-					test_count--;
-					break;
-				}
-
 				test_strings_p[cur_test] = &test_strings[i + 1];
 				cur_test++;
 			}
