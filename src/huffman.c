@@ -1,7 +1,7 @@
 /* 
  *	Filename:	huffman.c
  *	Author:	 	Jess Ferguson
- *	Date:		27/01/22
+ *	Date:		11/06/22
  *	Licence:	GNU GPL V3
  *
  *	Encode and decode a byte stream using Huffman coding
@@ -68,7 +68,7 @@
 
 #define HEADER_BASE_SIZE 6 /* Size of the header with no encoding representations stored */
 
-#define MAX_CODE_LEN 16 /* The longest any encoded representation is allowed to be */
+#define MAX_CODE_LENGTH 16 /* The longest any encoded representation is allowed to be */
 
 #define MAX_INPUT_SET_SIZE 1 << 8 /* The input can contain at most 256 (1 << 8) unique bytes */ 
 #define ENCODING_TABLE_LENGTH 1 << 8
@@ -207,7 +207,7 @@ static bool validate_huffman_tree(huffman_node_t * node)
 {
 	static int depth = 0;
 
-	if(depth == MAX_CODE_LEN)
+	if(depth == MAX_CODE_LENGTH)
 		return INVALID_TREE;
 
 	if(node->child[1]) {
@@ -312,7 +312,7 @@ int huffman_encode(const uint8_t * input, uint8_t ** output, const uint32_t deco
 	while(validate_huffman_tree(head_node) != VALID_TREE) {
 		destroy_huffman_tree(head_node);
 
-		return INPUT_ERROR; /* Fail gracefully if the tree is deeper than MAX_CODE_LEN */
+		return INPUT_ERROR; /* Fail gracefully if the tree is deeper than MAX_CODE_LENGTH */
 
 		/* TODO: Find a way to fix invalid trees and continue */
 	}
@@ -371,13 +371,23 @@ int huffman_encode(const uint8_t * input, uint8_t ** output, const uint32_t deco
 
 int huffman_decode(const uint8_t * input, uint8_t ** output)
 {
+	uint32_t decompressed_length = *(uint32_t *)&input[0];
+
+	if(!(*output = calloc(decompressed_length + 1, sizeof(uint8_t))))
+		return MEM_ERROR;
+
+	return huffman_decode_to_existing_buffer(input, *output, decompressed_length);
+}
+
+int huffman_decode_to_existing_buffer(const uint8_t * input, uint8_t * output, const uint32_t output_length)
+{
 	size_t bit_pos = HEADER_BASE_SIZE << 3;
-	huffman_coding_table_t decoding_table[DECODING_TABLE_LENGTH] = {{ .symbol = 0, .length = 0 }};
+	huffman_coding_table_t decoding_table[DECODING_TABLE_LENGTH] = { {.symbol = 0, .length = 0 } };
 
 	/* Extract header information */
 
-	uint32_t decompressed_length = * (uint32_t *) &input[0];
-	uint16_t header_bit_length = * (uint16_t *) &input[4] + (HEADER_BASE_SIZE << 3);
+	uint32_t decompressed_length = *(uint32_t*)&input[0];
+	uint16_t header_bit_length = *(uint16_t*)&input[4] + (HEADER_BASE_SIZE << 3);
 
 	/* Build decoding lookup table */
 
@@ -393,7 +403,7 @@ int huffman_decode(const uint8_t * input, uint8_t ** output)
 
 		bit_pos += 8;
 
-		uint8_t pad_length = MAX_CODE_LEN - encoded_length;
+		uint8_t pad_length = MAX_CODE_LENGTH - encoded_length;
 		uint16_t encoded_byte = peek_buffer(input, bit_pos) & ((1U << encoded_length) - 1); /* Trim all leading bits */
 
 		bit_pos += encoded_length;
@@ -401,71 +411,20 @@ int huffman_decode(const uint8_t * input, uint8_t ** output)
 		uint16_t padmask = (1U << pad_length) - 1;
 
 		for(uint16_t padding = 0; padding <= padmask; padding++)
-			decoding_table[encoded_byte | (padding << encoded_length)] = (huffman_coding_table_t) { .symbol = decoded_byte, .length = encoded_length };
+			decoding_table[encoded_byte | (padding << encoded_length)] = (huffman_coding_table_t){ .symbol = decoded_byte, .length = encoded_length };
 	}
 
-	if(!(*output = calloc(decompressed_length + 1, sizeof(uint8_t))))
-		return MEM_ERROR;
+	if(decompressed_length > output_length) /* As long as the output buffer is longer than or the same length as the decompressed string */
+		return LENGTH_ERROR;
 
 	/* Decode input stream */
 
 	for(uint32_t byte_count = 0; byte_count < decompressed_length; byte_count++) {
 		uint16_t buffer = peek_buffer(input, bit_pos);
 
-		(*output)[byte_count] = decoding_table[buffer].symbol;
+		output[byte_count] = decoding_table[buffer].symbol;
 		bit_pos += decoding_table[buffer].length;
 	}
 
-	(*output)[decompressed_length] = '\0';
-
 	return decompressed_length;
-}
-
-int huffman_decode_to_existing_buffer(const uint8_t* input, uint8_t* output, const uint32_t output_length)
-{
-    size_t bit_pos = HEADER_BASE_SIZE << 3;
-    huffman_coding_table_t decoding_table[DECODING_TABLE_LENGTH] = { {.symbol = 0, .length = 0 } };
-
-    /* Extract header information */
-
-    uint32_t decompressed_length = *(uint32_t*)&input[0];
-    uint16_t header_bit_length = *(uint16_t*)&input[4] + (HEADER_BASE_SIZE << 3);
-
-    /* Build decoding lookup table */
-
-    while (bit_pos < header_bit_length) {
-        uint8_t decoded_byte = peek_buffer(input, bit_pos);
-
-        bit_pos += 8;
-
-        uint8_t encoded_length = peek_buffer(input, bit_pos) & 15;
-
-        if (!encoded_length)
-            encoded_length = 16;
-
-        bit_pos += 8;
-
-        uint8_t pad_length = MAX_CODE_LEN - encoded_length;
-        uint16_t encoded_byte = peek_buffer(input, bit_pos) & ((1U << encoded_length) - 1); /* Trim all leading bits */
-
-        bit_pos += encoded_length;
-
-        uint16_t padmask = (1U << pad_length) - 1;
-
-        for (uint16_t padding = 0; padding <= padmask; padding++)
-            decoding_table[encoded_byte | (padding << encoded_length)] = (huffman_coding_table_t){ .symbol = decoded_byte, .length = encoded_length };
-    }
-
-    assert(decompressed_length == output_length);
-
-    /* Decode input stream */
-
-    for (uint32_t byte_count = 0; byte_count < decompressed_length; byte_count++) {
-        uint16_t buffer = peek_buffer(input, bit_pos);
-
-        output[byte_count] = decoding_table[buffer].symbol;
-        bit_pos += decoding_table[buffer].length;
-    }
-
-    return decompressed_length;
 }
