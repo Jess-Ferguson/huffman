@@ -59,6 +59,7 @@
 #include <stdbool.h>
 #include <stdlib.h> /* Internally includes stddef.h for size_t */
 #include <string.h>
+#include <assert.h>
 
 #include "huffman.h"
 
@@ -418,4 +419,53 @@ int huffman_decode(const uint8_t * input, uint8_t ** output)
 	(*output)[decompressed_length] = '\0';
 
 	return decompressed_length;
+}
+
+int huffman_decode_to_existing_buffer(const uint8_t* input, uint8_t* output, const uint32_t output_length)
+{
+    size_t bit_pos = HEADER_BASE_SIZE << 3;
+    huffman_coding_table_t decoding_table[DECODING_TABLE_LENGTH] = { {.symbol = 0, .length = 0 } };
+
+    /* Extract header information */
+
+    uint32_t decompressed_length = *(uint32_t*)&input[0];
+    uint16_t header_bit_length = *(uint16_t*)&input[4] + (HEADER_BASE_SIZE << 3);
+
+    /* Build decoding lookup table */
+
+    while (bit_pos < header_bit_length) {
+        uint8_t decoded_byte = peek_buffer(input, bit_pos);
+
+        bit_pos += 8;
+
+        uint8_t encoded_length = peek_buffer(input, bit_pos) & 15;
+
+        if (!encoded_length)
+            encoded_length = 16;
+
+        bit_pos += 8;
+
+        uint8_t pad_length = MAX_CODE_LEN - encoded_length;
+        uint16_t encoded_byte = peek_buffer(input, bit_pos) & ((1U << encoded_length) - 1); /* Trim all leading bits */
+
+        bit_pos += encoded_length;
+
+        uint16_t padmask = (1U << pad_length) - 1;
+
+        for (uint16_t padding = 0; padding <= padmask; padding++)
+            decoding_table[encoded_byte | (padding << encoded_length)] = (huffman_coding_table_t){ .symbol = decoded_byte, .length = encoded_length };
+    }
+
+    assert(decompressed_length == output_length);
+
+    /* Decode input stream */
+
+    for (uint32_t byte_count = 0; byte_count < decompressed_length; byte_count++) {
+        uint16_t buffer = peek_buffer(input, bit_pos);
+
+        output[byte_count] = decoding_table[buffer].symbol;
+        bit_pos += decoding_table[buffer].length;
+    }
+
+    return decompressed_length;
 }

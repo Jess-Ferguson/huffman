@@ -34,4 +34,6 @@
 int huffman_decode(const uint8_t * input, uint8_t ** output);
 int huffman_encode(const uint8_t * input, uint8_t ** output, const uint32_t decompressed_length);
 
+int huffman_decode_to_existing_buffer(const uint8_t* input, uint8_t* output, const uint32_t out_length);
+
 #endif
